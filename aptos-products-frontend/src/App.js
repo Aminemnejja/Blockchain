@@ -1,8 +1,8 @@
-// src/App.js - ÉTAPE 1: Interface PharmaCert de base
-import React, { useState } from "react";
+// src/App.js - ÉTAPE 2: Fonctionnalités avancées PharmaCert
+import React, { useState, useEffect } from "react";
 import { connectWallet, disconnectWallet } from "./aptosClient";
 import { addProduct, getProduct } from "./aptosFunctions";
-import "./pharma-styles.css"; // Nouveau fichier CSS
+import "./pharma-styles.css";
 
 function App() {
   const [address, setAddress] = useState("");
@@ -10,6 +10,7 @@ function App() {
   const [productData, setProductData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   // États du formulaire pharmaceutique
   const [name, setName] = useState("");
@@ -17,6 +18,66 @@ function App() {
   const [description, setDescription] = useState("");
   const [supplier, setSupplier] = useState("");
   const [batchNumber, setBatchNumber] = useState("");
+  
+  // États pour la navigation et les fonctionnalités
+  const [currentView, setCurrentView] = useState("dashboard");
+  const [productsList, setProductsList] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterCategory, setFilterCategory] = useState("all");
+  const [sortBy, setSortBy] = useState("newest");
+  const [productIdToSearch, setProductIdToSearch] = useState("1");
+
+  // Auto-clear messages
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(""), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(""), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
+
+  // Simuler des données locales (en attendant de pouvoir lire tous les produits de la blockchain)
+  useEffect(() => {
+    const mockProducts = [
+      {
+        id: "1",
+        name: "Paracétamol 500mg",
+        category: "principe-actif",
+        supplier: "PharmaSup Inc.",
+        batchNumber: "PSI-2025-0892",
+        description: "Principe actif pour analgésique",
+        arrival_date: Math.floor(Date.now() / 1000) - 3600,
+        status: "certified"
+      },
+      {
+        id: "2", 
+        name: "Lactose Monohydraté",
+        category: "excipient",
+        supplier: "ExciCorp Ltd.",
+        batchNumber: "ECL-2025-0156",
+        description: "Excipient de remplissage",
+        arrival_date: Math.floor(Date.now() / 1000) - 7200,
+        status: "certified"
+      },
+      {
+        id: "3",
+        name: "Blister PVC/Alu",
+        category: "emballage",
+        supplier: "PackPharma SA",
+        batchNumber: "PPS-2025-0234",
+        description: "Emballage primaire sécurisé",
+        arrival_date: Math.floor(Date.now() / 1000) - 1800,
+        status: "pending"
+      }
+    ];
+    setProductsList(mockProducts);
+  }, []);
 
   // Catégories pharmaceutiques
   const categories = [
@@ -59,12 +120,28 @@ function App() {
 
     setLoading(true);
     setError("");
+    setSuccess("");
+    
     try {
       // Créer description enrichie avec les données pharmaceutiques
       const enrichedDescription = `${description} | Fournisseur: ${supplier} | Lot: ${batchNumber}`;
       
       const hash = await addProduct(name, category, enrichedDescription, window.petra);
       setTxHash(hash);
+      setSuccess(`✅ Produit "${name}" certifié avec succès !`);
+
+      // Ajouter à la liste locale (simulation)
+      const newProduct = {
+        id: (productsList.length + 1).toString(),
+        name,
+        category,
+        supplier,
+        batchNumber,
+        description,
+        arrival_date: Math.floor(Date.now() / 1000),
+        status: "certified"
+      };
+      setProductsList(prev => [newProduct, ...prev]);
 
       // Reset form
       setName("");
@@ -72,6 +149,9 @@ function App() {
       setDescription("");
       setSupplier("");
       setBatchNumber("");
+      
+      // Retour au dashboard après ajout
+      setTimeout(() => setCurrentView("dashboard"), 2000);
     } catch (err) {
       setError("Erreur lors de l'ajout: " + err.message);
     } finally {
@@ -79,7 +159,7 @@ function App() {
     }
   };
 
-  // Lire un produit
+  // Lire un produit spécifique
   const handleGetProduct = async () => {
     if (!address) {
       setError("Veuillez d'abord connecter votre wallet pour obtenir l'adresse");
@@ -88,17 +168,66 @@ function App() {
 
     setLoading(true);
     setError("");
+    setSuccess("");
     setProductData(null);
 
     try {
-      const result = await getProduct(address, 1);
+      const result = await getProduct(address, parseInt(productIdToSearch));
       setProductData(result);
+      setSuccess(`Produit #${productIdToSearch} récupéré de la blockchain`);
     } catch (err) {
       setError("Erreur lors de la récupération: " + (err.message || JSON.stringify(err)));
     } finally {
       setLoading(false);
     }
   };
+
+  // Filtrer et trier les produits
+  const getFilteredProducts = () => {
+    let filtered = productsList;
+
+    // Filtre par recherche
+    if (searchTerm) {
+      filtered = filtered.filter(product => 
+        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.supplier.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.batchNumber.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // Filtre par catégorie
+    if (filterCategory !== "all") {
+      filtered = filtered.filter(product => product.category === filterCategory);
+    }
+
+    // Tri
+    filtered.sort((a, b) => {
+      switch(sortBy) {
+        case "newest": return b.arrival_date - a.arrival_date;
+        case "oldest": return a.arrival_date - b.arrival_date;
+        case "name": return a.name.localeCompare(b.name);
+        default: return 0;
+      }
+    });
+
+    return filtered;
+  };
+
+  // Statistiques dashboard
+  const getStats = () => {
+    const total = productsList.length;
+    const certified = productsList.filter(p => p.status === "certified").length;
+    const pending = productsList.filter(p => p.status === "pending").length;
+    const today = productsList.filter(p => {
+      const productDate = new Date(p.arrival_date * 1000);
+      const todayDate = new Date();
+      return productDate.toDateString() === todayDate.toDateString();
+    }).length;
+
+    return { total, certified, pending, today };
+  };
+
+  const stats = getStats();
 
   // Obtenir la couleur de la catégorie
   const getCategoryColor = (catValue) => {
@@ -128,6 +257,34 @@ function App() {
             <span className="subtitle">Certification Blockchain Pharmaceutique</span>
           </div>
           
+          {/* Navigation */}
+          <nav className="main-nav">
+            <button 
+              className={currentView === "dashboard" ? "nav-btn active" : "nav-btn"}
+              onClick={() => setCurrentView("dashboard")}
+            >
+              🏠 Dashboard
+            </button>
+            <button 
+              className={currentView === "add" ? "nav-btn active" : "nav-btn"}
+              onClick={() => setCurrentView("add")}
+            >
+              ➕ Ajouter
+            </button>
+            <button 
+              className={currentView === "list" ? "nav-btn active" : "nav-btn"}
+              onClick={() => setCurrentView("list")}
+            >
+              📋 Produits
+            </button>
+            <button 
+              className={currentView === "search" ? "nav-btn active" : "nav-btn"}
+              onClick={() => setCurrentView("search")}
+            >
+              🔍 Rechercher
+            </button>
+          </nav>
+          
           {/* Connexion wallet */}
           <div className="wallet-section">
             {address ? (
@@ -150,142 +307,341 @@ function App() {
       </header>
 
       <main className="pharma-main">
-        {/* Messages d'erreur */}
+        {/* Messages */}
         {error && (
           <div className="error-message">
             <span className="error-icon">⚠️</span>
             {error}
           </div>
         )}
+        
+        {success && (
+          <div className="success-message">
+            <span className="success-icon">✅</span>
+            {success}
+          </div>
+        )}
 
-        {/* Formulaire d'ajout */}
-        <section className="form-section">
-          <h2 className="section-title">
-            <span className="section-icon">➕</span>
-            Nouveau Produit Pharmaceutique
-          </h2>
-          
-          <div className="form-card">
-            <div className="form-row">
+        {/* DASHBOARD VIEW */}
+        {currentView === "dashboard" && (
+          <>
+            <section className="stats-section">
+              <h2 className="section-title">
+                <span className="section-icon">📊</span>
+                Tableau de Bord
+              </h2>
+              
+              <div className="stats-grid">
+                <div className="stat-card total">
+                  <div className="stat-value">{stats.total}</div>
+                  <div className="stat-label">Produits Total</div>
+                </div>
+                <div className="stat-card certified">
+                  <div className="stat-value">{stats.certified}</div>
+                  <div className="stat-label">Certifiés</div>
+                </div>
+                <div className="stat-card pending">
+                  <div className="stat-value">{stats.pending}</div>
+                  <div className="stat-label">En Attente</div>
+                </div>
+                <div className="stat-card today">
+                  <div className="stat-value">{stats.today}</div>
+                  <div className="stat-label">Aujourd'hui</div>
+                </div>
+              </div>
+            </section>
+
+            <section className="recent-section">
+              <h3 className="section-title">
+                <span className="section-icon">🕒</span>
+                Derniers Produits
+              </h3>
+              
+              <div className="recent-products">
+                {productsList.slice(0, 3).map(product => (
+                  <div key={product.id} className="recent-product-card">
+                    <div className="product-header">
+                      <span 
+                        className="product-id"
+                        style={{ backgroundColor: getCategoryColor(product.category) }}
+                      >
+                        #{product.id}
+                      </span>
+                      <h4 className="product-name">{product.name}</h4>
+                      <span className={`status-badge ${product.status}`}>
+                        {product.status === "certified" ? "✅ Certifié" : "⏳ En attente"}
+                      </span>
+                    </div>
+                    <div className="product-details">
+                      <span className="product-supplier">{product.supplier}</span>
+                      <span className="product-time">
+                        {formatArrivalDate(product.arrival_date)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </>
+        )}
+
+        {/* ADD PRODUCT VIEW */}
+        {currentView === "add" && (
+          <section className="form-section">
+            <h2 className="section-title">
+              <span className="section-icon">➕</span>
+              Nouveau Produit Pharmaceutique
+            </h2>
+            
+            <div className="form-card">
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Nom du produit *</label>
+                  <input
+                    type="text"
+                    placeholder="ex: Paracétamol 500mg"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="form-input"
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label>Catégorie *</label>
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="form-select"
+                    style={{ borderLeftColor: getCategoryColor(category) }}
+                  >
+                    {categories.map(cat => (
+                      <option key={cat.value} value={cat.value}>
+                        {cat.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Fournisseur *</label>
+                  <input
+                    type="text"
+                    placeholder="ex: PharmaSup Inc."
+                    value={supplier}
+                    onChange={(e) => setSupplier(e.target.value)}
+                    className="form-input"
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label>Numéro de lot *</label>
+                  <input
+                    type="text"
+                    placeholder="ex: PSI-2025-0892"
+                    value={batchNumber}
+                    onChange={(e) => setBatchNumber(e.target.value)}
+                    className="form-input"
+                  />
+                </div>
+              </div>
+
               <div className="form-group">
-                <label>Nom du produit *</label>
+                <label>Description *</label>
+                <textarea
+                  placeholder="Description détaillée du produit..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="form-textarea"
+                  rows="3"
+                />
+              </div>
+
+              <button 
+                onClick={handleAddProduct} 
+                disabled={loading || !address}
+                className="btn-submit"
+              >
+                {loading ? (
+                  <>⏳ Certification en cours...</>
+                ) : (
+                  <>🔗 Certifier sur la Blockchain</>
+                )}
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* PRODUCTS LIST VIEW */}
+        {currentView === "list" && (
+          <section className="list-section">
+            <h2 className="section-title">
+              <span className="section-icon">📋</span>
+              Liste des Produits Certifiés
+            </h2>
+            
+            {/* Filtres */}
+            <div className="filters-bar">
+              <div className="search-group">
                 <input
                   type="text"
-                  placeholder="ex: Paracétamol 500mg"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="form-input"
+                  placeholder="🔍 Rechercher par nom, fournisseur ou lot..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="search-input"
                 />
               </div>
               
-              <div className="form-group">
-                <label>Catégorie *</label>
+              <div className="filter-group">
                 <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="form-select"
-                  style={{ borderLeftColor: getCategoryColor(category) }}
+                  value={filterCategory}
+                  onChange={(e) => setFilterCategory(e.target.value)}
+                  className="filter-select"
                 >
+                  <option value="all">Toutes catégories</option>
                   {categories.map(cat => (
                     <option key={cat.value} value={cat.value}>
                       {cat.label}
                     </option>
                   ))}
                 </select>
+                
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="filter-select"
+                >
+                  <option value="newest">Plus récents</option>
+                  <option value="oldest">Plus anciens</option>
+                  <option value="name">Par nom</option>
+                </select>
               </div>
             </div>
 
-            <div className="form-row">
-              <div className="form-group">
-                <label>Fournisseur *</label>
-                <input
-                  type="text"
-                  placeholder="ex: PharmaSup Inc."
-                  value={supplier}
-                  onChange={(e) => setSupplier(e.target.value)}
-                  className="form-input"
-                />
-              </div>
+            {/* Liste des produits */}
+            <div className="products-grid">
+              {getFilteredProducts().map(product => (
+                <div key={product.id} className="product-card-full">
+                  <div className="product-header">
+                    <span 
+                      className="product-id"
+                      style={{ backgroundColor: getCategoryColor(product.category) }}
+                    >
+                      #{product.id}
+                    </span>
+                    <h4 className="product-name">{product.name}</h4>
+                    <span className={`status-badge ${product.status}`}>
+                      {product.status === "certified" ? "✅ Certifié" : "⏳ En attente"}
+                    </span>
+                  </div>
+                  
+                  <div className="product-details">
+                    <div className="detail-row">
+                      <span className="detail-label">Catégorie:</span>
+                      <span className="detail-value">
+                        {categories.find(c => c.value === product.category)?.label || product.category}
+                      </span>
+                    </div>
+                    
+                    <div className="detail-row">
+                      <span className="detail-label">Fournisseur:</span>
+                      <span className="detail-value">{product.supplier}</span>
+                    </div>
+                    
+                    <div className="detail-row">
+                      <span className="detail-label">Lot:</span>
+                      <span className="detail-value">{product.batchNumber}</span>
+                    </div>
+                    
+                    <div className="detail-row">
+                      <span className="detail-label">Date d'arrivée:</span>
+                      <span className="detail-value">
+                        {formatArrivalDate(product.arrival_date)}
+                      </span>
+                    </div>
+                    
+                    <div className="detail-row">
+                      <span className="detail-label">Description:</span>
+                      <span className="detail-value">{product.description}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
               
-              <div className="form-group">
-                <label>Numéro de lot *</label>
-                <input
-                  type="text"
-                  placeholder="ex: PSI-2025-0892"
-                  value={batchNumber}
-                  onChange={(e) => setBatchNumber(e.target.value)}
-                  className="form-input"
-                />
+              {getFilteredProducts().length === 0 && (
+                <div className="no-results">
+                  <span className="no-results-icon">🔍</span>
+                  <h3>Aucun produit trouvé</h3>
+                  <p>Essayez de modifier vos critères de recherche</p>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* SEARCH BLOCKCHAIN VIEW */}
+        {currentView === "search" && (
+          <section className="search-section">
+            <h2 className="section-title">
+              <span className="section-icon">🔍</span>
+              Recherche Blockchain
+            </h2>
+            
+            <div className="search-card">
+              <p className="search-description">
+                Rechercher un produit directement sur la blockchain par son ID
+              </p>
+              
+              <div className="search-form">
+                <div className="form-group">
+                  <label>ID du produit à rechercher</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={productIdToSearch}
+                    onChange={(e) => setProductIdToSearch(e.target.value)}
+                    className="form-input"
+                    placeholder="ex: 1"
+                  />
+                </div>
+                
+                <button 
+                  onClick={handleGetProduct} 
+                  disabled={loading}
+                  className="btn-secondary"
+                >
+                  {loading ? "⏳ Recherche..." : "🔍 Rechercher sur la Blockchain"}
+                </button>
               </div>
             </div>
-
-            <div className="form-group">
-              <label>Description *</label>
-              <textarea
-                placeholder="Description détaillée du produit..."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="form-textarea"
-                rows="3"
-              />
-            </div>
-
-            <button 
-              onClick={handleAddProduct} 
-              disabled={loading || !address}
-              className="btn-submit"
-            >
-              {loading ? (
-                <>⏳ Certification en cours...</>
-              ) : (
-                <>🔗 Certifier sur la Blockchain</>
-              )}
-            </button>
-          </div>
-        </section>
-
-        {/* Section consultation */}
-        <section className="consultation-section">
-          <h2 className="section-title">
-            <span className="section-icon">🔍</span>
-            Consulter les Certifications
-          </h2>
-          
-          <div className="consultation-card">
-            <button 
-              onClick={handleGetProduct} 
-              disabled={loading}
-              className="btn-secondary"
-            >
-              {loading ? "⏳ Chargement..." : "📋 Afficher Produit (ID=1)"}
-            </button>
-          </div>
-        </section>
+          </section>
+        )}
 
         {/* Résultat transaction */}
         {txHash && (
           <section className="result-section success">
-            <h3>✅ Certification Réussie</h3>
+            <h3>🔗 Transaction Blockchain</h3>
             <p>
-              Transaction blockchain :{" "}
+              Hash de la transaction :{" "}
               <a
                 href={`https://explorer.aptoslabs.com/txn/${txHash}?network=testnet`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="tx-link"
               >
-                Voir sur Aptos Explorer
+                {txHash.slice(0, 20)}...
               </a>
             </p>
           </section>
         )}
 
-        {/* Résultat produit */}
+        {/* Résultat produit blockchain */}
         {productData && (
           <section className="result-section">
             <h3 className="result-title">
               <span className="result-icon">📄</span>
-              Données Certifiées
+              Données Blockchain
             </h3>
             
             <div className="product-cards">

@@ -3,6 +3,27 @@ class NotificationManager {
   constructor() {
     this.notifications = [];
     this.listeners = [];
+    this.initializeEventSource();
+  }
+
+  // Initialiser la source d'événements pour les notifications en temps réel
+  initializeEventSource() {
+    if (typeof window !== 'undefined') {
+      // Écouter les événements de la blockchain
+      window.aptos?.onAccountChanged(() => {
+        this.checkNewTransactions();
+      });
+    }
+  }
+
+  // Vérifier les nouvelles transactions liées aux produits
+  async checkNewTransactions() {
+    try {
+      // À implémenter : logique pour vérifier les nouvelles transactions
+      // et créer des notifications appropriées
+    } catch (error) {
+      console.error('Erreur lors de la vérification des transactions:', error);
+    }
   }
 
   // Ajouter une nouvelle notification
@@ -11,12 +32,24 @@ class NotificationManager {
       id: Date.now(),
       timestamp: Date.now(),
       read: false,
-      ...notification
+      ...notification,
+      type: notification.type || 'info'  // Ajouter le type de notification
     };
+    
+    // Ajouter le son de notification
+    if (!newNotification.read && !notification.silent) {
+      this.playNotificationSound();
+    }
     
     this.notifications.unshift(newNotification);
     this.notifyListeners();
     return newNotification;
+  }
+
+  // Jouer un son de notification
+  playNotificationSound() {
+    const audio = new Audio('/notification-sound.mp3');
+    audio.play().catch(e => console.log('Erreur lors de la lecture du son:', e));
   }
 
   // Marquer une notification comme lue

@@ -2,12 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 
 const NotificationBell = ({ notifications, onNotificationClick, unreadCount }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef(null);
+  const containerRef = useRef(null);
 
-  // Gérer les clics en dehors du menu pour le fermer
+  // Fermer le menu quand on clique en dehors
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
         setIsOpen(false);
       }
     };
@@ -17,16 +17,24 @@ const NotificationBell = ({ notifications, onNotificationClick, unreadCount }) =
   }, []);
 
   // Gérer le clic sur une notification
-  const handleNotificationClick = (notif) => {
-    onNotificationClick(notif.id);
-    setIsOpen(false);
+  const handleNotificationClick = (id, event) => {
+    event.stopPropagation();
+    onNotificationClick(id);
+    // Ne pas fermer le menu lors du clic sur une notification
+  };
+
+  // Gérer le clic sur "Tout marquer comme lu"
+  const handleMarkAllAsRead = (event) => {
+    event.stopPropagation();
+    onNotificationClick('all');
   };
 
   return (
-    <div className="notification-container">
+    <div className="notification-container" ref={containerRef}>
       <button 
         className="notification-bell"
         onClick={() => setIsOpen(!isOpen)}
+        aria-label="Notifications"
       >
         🔔
         {unreadCount > 0 && (
@@ -35,16 +43,13 @@ const NotificationBell = ({ notifications, onNotificationClick, unreadCount }) =
       </button>
 
       {isOpen && (
-        <div className="notification-dropdown" ref={dropdownRef}>
+        <div className="notification-dropdown">
           <div className="notification-header">
-            <h3>Notifications {unreadCount > 0 && `(${unreadCount})`}</h3>
-            {notifications.length > 0 && (
+            <h3>Notifications</h3>
+            {unreadCount > 0 && (
               <button 
                 className="btn-clear" 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onNotificationClick('all');
-                }}
+                onClick={handleMarkAllAsRead}
               >
                 Tout marquer comme lu
               </button>
@@ -62,10 +67,9 @@ const NotificationBell = ({ notifications, onNotificationClick, unreadCount }) =
                 <div 
                   key={notif.id} 
                   className={`notification-item ${notif.read ? '' : 'unread'}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleNotificationClick(notif);
-                  }}
+                  onClick={(e) => handleNotificationClick(notif.id, e)}
+                  role="button"
+                  tabIndex={0}
                 >
                   <div className="notification-icon">
                     {notif.type === 'product' ? '📦' : 
@@ -75,7 +79,13 @@ const NotificationBell = ({ notifications, onNotificationClick, unreadCount }) =
                   <div className="notification-content">
                     <div className="notification-message">{notif.message}</div>
                     <div className="notification-time">
-                      {new Date(notif.timestamp).toLocaleString('fr-FR')}
+                      {new Date(notif.timestamp).toLocaleString('fr-FR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
                     </div>
                   </div>
                   {!notif.read && <div className="notification-dot" />}

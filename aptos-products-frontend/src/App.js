@@ -1,7 +1,11 @@
 // src/App.js - ÉTAPE 2: Fonctionnalités avancées PharmaCert
 import React, { useState, useEffect } from "react";
-import { connectWallet, disconnectWallet } from "./aptosClient";
 import { addProduct, getProduct } from "./aptosFunctions";
+import { generateProductPDF } from "./utils/pdfUtils";
+import { ToastContainer, toast } from 'react-toastify';
+import NotificationBell from './components/NotificationBell';
+import notificationManager from './utils/notificationManager';
+import 'react-toastify/dist/ReactToastify.css';
 import "./pharma-styles.css";
 
 function App() {
@@ -11,6 +15,8 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  // Nouvel état pour la gestion des rôles
+  const [userRole, setUserRole] = useState(null); // 'admin' ou 'user'
 
   // États du formulaire pharmaceutique
   const [name, setName] = useState("");
@@ -26,6 +32,17 @@ function App() {
   const [filterCategory, setFilterCategory] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
   const [productIdToSearch, setProductIdToSearch] = useState("1");
+  
+  // États pour la gestion des administrateurs
+  const [newAdminAddress, setNewAdminAddress] = useState("");
+  const [adminList, setAdminList] = useState([
+    // Liste initiale des administrateurs
+    { address: "0x123...", dateAdded: Date.now() }
+  ]);
+
+  // États pour les notifications
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Auto-clear messages
   useEffect(() => {
@@ -41,6 +58,19 @@ function App() {
       return () => clearTimeout(timer);
     }
   }, [success]);
+
+  // Effet pour les notifications
+  useEffect(() => {
+    // S'abonner aux notifications
+    const unsubscribe = notificationManager.subscribe((notifications) => {
+      setNotifications(notifications);
+      setUnreadCount(notificationManager.getUnreadCount());
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   // Simuler des données locales (en attendant de pouvoir lire tous les produits de la blockchain)
   useEffect(() => {
@@ -87,20 +117,29 @@ function App() {
     { value: "matiere-premiere", label: "🟣 Matière Première", color: "#8b5cf6" }
   ];
 
-  // Connexion wallet
+  // Liste des adresses administrateurs
+  const adminAddresses = [
+    "0x6c940c3205cb7d3b40a2fbb4e550aabaf7a13bb3f92465ac2fe4b31bbd664e02", // Adresse admin principale
+  ];  // Connexion wallet
   const handleConnect = async () => {
     try {
-      const addr = await connectWallet();
-      if (addr) setAddress(addr);
+      const { address } = await window.petra.connect();
+      setAddress(address);
+      
+      // Vérification du rôle
+      const isAdmin = adminAddresses.includes(address);
+      setUserRole(isAdmin ? 'admin' : 'user');
+      
+      setSuccess(`Connecté en tant que ${isAdmin ? 'administrateur' : 'utilisateur'}`);
     } catch (err) {
-      setError("Erreur de connexion au wallet: " + err.message);
+      setError("Erreur de connexion: " + err.message);
     }
-  };
-
-  const handleDisconnect = async () => {
+  };    const handleDisconnect = async () => {
     try {
-      await disconnectWallet();
+      await window.petra.disconnect();
       setAddress("");
+      setUserRole(null);
+      setSuccess("Déconnecté avec succès");
     } catch (err) {
       setError("Erreur de déconnexion: " + err.message);
     }
@@ -108,6 +147,12 @@ function App() {
 
   // Ajouter un produit pharmaceutique
   const handleAddProduct = async () => {
+    // Vérifier les permissions
+    if (!checkPermission('admin')) {
+      setError("Permission refusée : Seuls les administrateurs peuvent ajouter des produits");
+      return;
+    }
+
     if (!window.petra) {
       setError("Petra Wallet non connecté");
       return;
@@ -142,6 +187,14 @@ function App() {
         status: "certified"
       };
       setProductsList(prev => [newProduct, ...prev]);
+
+      // Créer une notification
+      notificationManager.notifyNewProduct({
+        name,
+        category,
+        supplier,
+        batchNumber
+      });
 
       // Reset form
       setName("");
@@ -229,13 +282,18 @@ function App() {
 
   const stats = getStats();
 
+  // Vérification des permissions
+  const checkPermission = (requiredRole) => {
+    if (!address) return false;
+    if (requiredRole === 'admin' && userRole !== 'admin') return false;
+    return true;
+  };
+
   // Obtenir la couleur de la catégorie
   const getCategoryColor = (catValue) => {
     const cat = categories.find(c => c.value === catValue);
-    return cat ? cat.color : "#6b7280";
-  };
-
-  // Formater la date d'arrivée
+    return cat ? cat.color : "#64748b";
+  };  // Formater la date d'arrivée
   const formatArrivalDate = (timestamp) => {
     return new Date(parseInt(timestamp) * 1000).toLocaleString('fr-FR', {
       day: '2-digit',
@@ -248,6 +306,17 @@ function App() {
 
   return (
     <div className="pharma-app">
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
       {/* Header */}
       <header className="pharma-header">
         <div className="header-content">
@@ -265,12 +334,14 @@ function App() {
             >
               🏠 Dashboard
             </button>
-            <button 
-              className={currentView === "add" ? "nav-btn active" : "nav-btn"}
-              onClick={() => setCurrentView("add")}
-            >
-              ➕ Ajouter
-            </button>
+            {userRole === 'admin' && (
+              <button 
+                className={currentView === "add" ? "nav-btn active" : "nav-btn"}
+                onClick={() => setCurrentView("add")}
+              >
+                ➕ Ajouter
+              </button>
+            )}
             <button 
               className={currentView === "list" ? "nav-btn active" : "nav-btn"}
               onClick={() => setCurrentView("list")}
@@ -283,15 +354,39 @@ function App() {
             >
               🔍 Rechercher
             </button>
+            {userRole === 'admin' && (
+              <button 
+                className={currentView === "admin" ? "nav-btn active" : "nav-btn"}
+                onClick={() => setCurrentView("admin")}
+              >
+                👑 Administration
+              </button>
+            )}
           </nav>
           
           {/* Connexion wallet */}
           <div className="wallet-section">
+            {address && (
+              <NotificationBell
+                notifications={notifications}
+                unreadCount={unreadCount}
+                onNotificationClick={(id) => {
+                  notificationManager.markAsRead(id);
+                  setUnreadCount(notificationManager.getUnreadCount());
+                }}
+              />
+            )}
             {address ? (
               <div className="wallet-connected">
                 <div className="wallet-info">
-                  <span className="wallet-label">Wallet connecté</span>
-                  <span className="wallet-address">{address.slice(0, 8)}...{address.slice(-6)}</span>
+                  <span className={`wallet-label ${userRole}`}>
+                    <span className={`role-badge ${userRole}`}>
+                      {userRole === 'admin' ? '👑 ADMIN' : '👤 USER'}
+                    </span>
+                  </span>
+                  <span className="wallet-address">
+                    {address.slice(0, 8)}...{address.slice(-6)}
+                  </span>
                 </div>
                 <button className="btn-disconnect" onClick={handleDisconnect}>
                   🔌 Déconnecter
@@ -325,31 +420,51 @@ function App() {
         {/* DASHBOARD VIEW */}
         {currentView === "dashboard" && (
           <>
-            <section className="stats-section">
-              <h2 className="section-title">
-                <span className="section-icon">📊</span>
-                Tableau de Bord
-              </h2>
-              
-              <div className="stats-grid">
-                <div className="stat-card total">
-                  <div className="stat-value">{stats.total}</div>
-                  <div className="stat-label">Produits Total</div>
+            {userRole === 'admin' ? (
+              <section className="stats-section">
+                <h2 className="section-title">
+                  <span className="section-icon">📊</span>
+                  Tableau de Bord Administrateur
+                </h2>
+                
+                <div className="stats-grid">
+                  <div className="stat-card total">
+                    <div className="stat-value">{stats.total}</div>
+                    <div className="stat-label">Produits Total</div>
+                  </div>
+                  <div className="stat-card certified">
+                    <div className="stat-value">{stats.certified}</div>
+                    <div className="stat-label">Certifiés</div>
+                  </div>
+                  <div className="stat-card pending">
+                    <div className="stat-value">{stats.pending}</div>
+                    <div className="stat-label">En Attente</div>
+                  </div>
+                  <div className="stat-card today">
+                    <div className="stat-value">{stats.today}</div>
+                    <div className="stat-label">Aujourd'hui</div>
+                  </div>
                 </div>
-                <div className="stat-card certified">
-                  <div className="stat-value">{stats.certified}</div>
-                  <div className="stat-label">Certifiés</div>
+              </section>
+            ) : (
+              <section className="stats-section">
+                <h2 className="section-title">
+                  <span className="section-icon">📊</span>
+                  Tableau de Bord Utilisateur
+                </h2>
+                
+                <div className="stats-grid">
+                  <div className="stat-card total">
+                    <div className="stat-value">{stats.total}</div>
+                    <div className="stat-label">Produits Total</div>
+                  </div>
+                  <div className="stat-card certified">
+                    <div className="stat-value">{stats.certified}</div>
+                    <div className="stat-label">Certifiés</div>
+                  </div>
                 </div>
-                <div className="stat-card pending">
-                  <div className="stat-value">{stats.pending}</div>
-                  <div className="stat-label">En Attente</div>
-                </div>
-                <div className="stat-card today">
-                  <div className="stat-value">{stats.today}</div>
-                  <div className="stat-label">Aujourd'hui</div>
-                </div>
-              </div>
-            </section>
+              </section>
+            )}
 
             <section className="recent-section">
               <h3 className="section-title">
@@ -521,7 +636,7 @@ function App() {
 
             {/* Liste des produits */}
             <div className="products-grid">
-              {getFilteredProducts().map(product => (
+                  {getFilteredProducts().map(product => (
                 <div key={product.id} className="product-card-full">
                   <div className="product-header">
                     <span 
@@ -534,6 +649,9 @@ function App() {
                     <span className={`status-badge ${product.status}`}>
                       {product.status === "certified" ? "✅ Certifié" : "⏳ En attente"}
                     </span>
+                    {userRole === 'admin' && (
+                      <span className="admin-badge">Admin Only</span>
+                    )}
                   </div>
                   
                   <div className="product-details">
@@ -544,15 +662,20 @@ function App() {
                       </span>
                     </div>
                     
-                    <div className="detail-row">
-                      <span className="detail-label">Fournisseur:</span>
-                      <span className="detail-value">{product.supplier}</span>
-                    </div>
-                    
-                    <div className="detail-row">
-                      <span className="detail-label">Lot:</span>
-                      <span className="detail-value">{product.batchNumber}</span>
-                    </div>
+                    {/* Information sensible visible uniquement par les admins */}
+                    {userRole === 'admin' && (
+                      <>
+                        <div className="detail-row">
+                          <span className="detail-label">Fournisseur:</span>
+                          <span className="detail-value">{product.supplier}</span>
+                        </div>
+                        
+                        <div className="detail-row">
+                          <span className="detail-label">Lot:</span>
+                          <span className="detail-value">{product.batchNumber}</span>
+                        </div>
+                      </>
+                    )}
                     
                     <div className="detail-row">
                       <span className="detail-label">Date d'arrivée:</span>
@@ -565,11 +688,38 @@ function App() {
                       <span className="detail-label">Description:</span>
                       <span className="detail-value">{product.description}</span>
                     </div>
+
+                    {userRole === 'admin' && (
+                      <div className="admin-actions">
+                        <button 
+                          className="btn-secondary"
+                          onClick={() => {
+                            generateProductPDF(product, categories)
+                              .then(() => {
+                                toast.success("PDF généré avec succès");
+                              })
+                              .catch((error) => {
+                                toast.error("Erreur lors de la génération du PDF");
+                                console.error(error);
+                              });
+                          }}
+                        >
+                          📄 Exporter PDF
+                        </button>
+                        <button 
+                          className="btn-secondary"
+                          onClick={() => {
+                            // Action d'administration (à implémenter)
+                            setSuccess("Action d'administration effectuée");
+                          }}
+                        >
+                          ⚙️ Actions Admin
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
-              ))}
-              
-              {getFilteredProducts().length === 0 && (
+              ))}              {getFilteredProducts().length === 0 && (
                 <div className="no-results">
                   <span className="no-results-icon">🔍</span>
                   <h3>Aucun produit trouvé</h3>
@@ -619,6 +769,74 @@ function App() {
         )}
 
         {/* Résultat transaction */}
+                {currentView === "admin" && userRole === "admin" && (
+          <section className="admin-section">
+            <h2 className="section-title">
+              <span className="section-icon">👑</span>
+              Administration
+            </h2>
+            
+            <div className="admin-card">
+              <h3 className="admin-subtitle">Gestion des Administrateurs</h3>
+              
+              <div className="form-card">
+                <div className="form-group">
+                  <label>Ajouter un administrateur</label>
+                  <div className="admin-add-group">
+                    <input
+                      type="text"
+                      placeholder="Adresse du wallet (0x...)"
+                      value={newAdminAddress}
+                      onChange={(e) => setNewAdminAddress(e.target.value)}
+                      className="form-input"
+                    />
+                    <button 
+                      className="btn-secondary"
+                      onClick={() => {
+                        if (newAdminAddress) {
+                          setAdminList([...adminList, { 
+                            address: newAdminAddress, 
+                            dateAdded: Date.now() 
+                          }]);
+                          setNewAdminAddress("");
+                          setSuccess("Administrateur ajouté avec succès");
+                        }
+                      }}
+                    >
+                      ➕ Ajouter
+                    </button>
+                  </div>
+                </div>
+
+                <div className="admin-list">
+                  <h4>Liste des Administrateurs</h4>
+                  {adminList.map((admin, index) => (
+                    <div key={index} className="admin-item">
+                      <div className="admin-info">
+                        <span className="admin-address">{admin.address}</span>
+                        <span className="admin-date">
+                          Ajouté le {new Date(admin.dateAdded).toLocaleDateString()}
+                        </span>
+                      </div>
+                      {admin.address !== address && (
+                        <button 
+                          className="btn-remove"
+                          onClick={() => {
+                            setAdminList(adminList.filter((_, i) => i !== index));
+                            setSuccess("Administrateur retiré avec succès");
+                          }}
+                        >
+                          ❌ Retirer
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
         {txHash && (
           <section className="result-section success">
             <h3>🔗 Transaction Blockchain</h3>

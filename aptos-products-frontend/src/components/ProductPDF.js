@@ -1,6 +1,7 @@
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, PDFDownloadLink, Image } from '@react-pdf/renderer';
 import Logo from './Logo';
+import QRCode from 'qrcode';
 
 // Styles pour le PDF
 const styles = StyleSheet.create({

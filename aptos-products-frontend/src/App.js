@@ -1,6 +1,6 @@
 // src/App.js - ÉTAPE 2: Fonctionnalités avancées PharmaCert
 import React, { useState, useEffect } from "react";
-import { addProduct, getProduct } from "./aptosFunctions";
+import { addProduct, getProduct, getAllProducts } from "./aptosFunctions";
 import { generateProductPDF } from "./utils/pdfUtils";
 import { ToastContainer, toast } from 'react-toastify';
 import NotificationBell from './components/NotificationBell';
@@ -32,7 +32,6 @@ function App() {
   const [filterCategory, setFilterCategory] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
   const [productIdToSearch, setProductIdToSearch] = useState("1");
-  
   // États pour la gestion des administrateurs
   const [newAdminAddress, setNewAdminAddress] = useState("");
   const [adminList, setAdminList] = useState([
@@ -72,41 +71,99 @@ function App() {
     };
   }, []);
 
-  // Simuler des données locales (en attendant de pouvoir lire tous les produits de la blockchain)
+  // Charger les produits depuis la blockchain, fallback sur des mocks si nécessaire
   useEffect(() => {
-    const mockProducts = [
-      {
-        id: "1",
-        name: "Paracétamol 500mg",
-        category: "principe-actif",
-        supplier: "PharmaSup Inc.",
-        batchNumber: "PSI-2025-0892",
-        description: "Principe actif pour analgésique",
-        arrival_date: Math.floor(Date.now() / 1000) - 3600,
-        status: "certified"
-      },
-      {
-        id: "2", 
-        name: "Lactose Monohydraté",
-        category: "excipient",
-        supplier: "ExciCorp Ltd.",
-        batchNumber: "ECL-2025-0156",
-        description: "Excipient de remplissage",
-        arrival_date: Math.floor(Date.now() / 1000) - 7200,
-        status: "certified"
-      },
-      {
-        id: "3",
-        name: "Blister PVC/Alu",
-        category: "emballage",
-        supplier: "PackPharma SA",
-        batchNumber: "PPS-2025-0234",
-        description: "Emballage primaire sécurisé",
-        arrival_date: Math.floor(Date.now() / 1000) - 1800,
-        status: "pending"
+    let mounted = true;
+
+    const loadProducts = async () => {
+      setLoading(true);
+      try {
+        // Par défaut on lit depuis le module (adresse module) pour récupérer la registry globale
+        const onchain = await getAllProducts();
+        if (mounted && Array.isArray(onchain) && onchain.length > 0) {
+          setProductsList(onchain);
+        } else {
+          // fallback : mocks locaux (utile en dev)
+          console.warn('Aucun produit on-chain trouvé, utilisation des mocks');
+          const mockProducts = [
+            {
+              id: "1",
+              name: "Paracétamol 500mg",
+              category: "principe-actif",
+              supplier: "PharmaSup Inc.",
+              batchNumber: "PSI-2025-0892",
+              description: "Principe actif pour analgésique",
+              arrival_date: Math.floor(Date.now() / 1000) - 3600,
+              status: "certified"
+            },
+            {
+              id: "2", 
+              name: "Lactose Monohydraté",
+              category: "excipient",
+              supplier: "ExciCorp Ltd.",
+              batchNumber: "ECL-2025-0156",
+              description: "Excipient de remplissage",
+              arrival_date: Math.floor(Date.now() / 1000) - 7200,
+              status: "certified"
+            },
+            {
+              id: "3",
+              name: "Blister PVC/Alu",
+              category: "emballage",
+              supplier: "PackPharma SA",
+              batchNumber: "PPS-2025-0234",
+              description: "Emballage primaire sécurisé",
+              arrival_date: Math.floor(Date.now() / 1000) - 1800,
+              status: "certified"
+            }
+          ];
+          if (mounted) setProductsList(mockProducts);
+        }
+      } catch (err) {
+        console.error('Erreur lors du chargement on-chain, utilisation des mocks', err);
+        if (mounted) {
+          const mockProducts = [
+            {
+              id: "1",
+              name: "Paracétamol 500mg",
+              category: "principe-actif",
+              supplier: "PharmaSup Inc.",
+              batchNumber: "PSI-2025-0892",
+              description: "Principe actif pour analgésique",
+              arrival_date: Math.floor(Date.now() / 1000) - 3600,
+              status: "certified"
+            },
+            {
+              id: "2", 
+              name: "Lactose Monohydraté",
+              category: "excipient",
+              supplier: "ExciCorp Ltd.",
+              batchNumber: "ECL-2025-0156",
+              description: "Excipient de remplissage",
+              arrival_date: Math.floor(Date.now() / 1000) - 7200,
+              status: "certified"
+            },
+            {
+              id: "3",
+              name: "Blister PVC/Alu",
+              category: "emballage",
+              supplier: "PackPharma SA",
+              batchNumber: "PPS-2025-0234",
+              description: "Emballage primaire sécurisé",
+              arrival_date: Math.floor(Date.now() / 1000) - 1800,
+              status: "certified"
+            }
+          ];
+          setProductsList(mockProducts);
+        }
+      } finally {
+        if (mounted) setLoading(false);
       }
-    ];
-    setProductsList(mockProducts);
+    };
+
+    loadProducts();
+
+    return () => { mounted = false; };
   }, []);
 
   // Catégories pharmaceutiques
@@ -242,9 +299,12 @@ function App() {
     // Filtre par recherche
     if (searchTerm) {
       filtered = filtered.filter(product => 
-        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.supplier.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.batchNumber.toLowerCase().includes(searchTerm.toLowerCase())
+        // Recherche par ID (conversion en string pour la comparaison)
+        (product.id?.toString() || '').includes(searchTerm) ||
+        // Recherche par nom, description et catégorie
+        (product.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+        (product.description?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+        (product.category?.toLowerCase() || '').includes(searchTerm.toLowerCase()) 
       );
     }
 
@@ -269,15 +329,14 @@ function App() {
   // Statistiques dashboard
   const getStats = () => {
     const total = productsList.length;
-    const certified = productsList.filter(p => p.status === "certified").length;
-    const pending = productsList.filter(p => p.status === "pending").length;
+    const certified = total; // tout est certifié
     const today = productsList.filter(p => {
       const productDate = new Date(p.arrival_date * 1000);
       const todayDate = new Date();
       return productDate.toDateString() === todayDate.toDateString();
     }).length;
 
-    return { total, certified, pending, today };
+    return { total, certified, today };
   };
 
   const stats = getStats();
@@ -348,12 +407,7 @@ function App() {
             >
               📋 Produits
             </button>
-            <button 
-              className={currentView === "search" ? "nav-btn active" : "nav-btn"}
-              onClick={() => setCurrentView("search")}
-            >
-              🔍 Rechercher
-            </button>
+
             {userRole === 'admin' && (
               <button 
                 className={currentView === "admin" ? "nav-btn active" : "nav-btn"}
@@ -436,10 +490,7 @@ function App() {
                     <div className="stat-value">{stats.certified}</div>
                     <div className="stat-label">Certifiés</div>
                   </div>
-                  <div className="stat-card pending">
-                    <div className="stat-value">{stats.pending}</div>
-                    <div className="stat-label">En Attente</div>
-                  </div>
+                  {/* Statut en attente supprimé: tout est certifié à l'ajout */}
                   <div className="stat-card today">
                     <div className="stat-value">{stats.today}</div>
                     <div className="stat-label">Aujourd'hui</div>
@@ -483,8 +534,8 @@ function App() {
                         #{product.id}
                       </span>
                       <h4 className="product-name">{product.name}</h4>
-                      <span className={`status-badge ${product.status}`}>
-                        {product.status === "certified" ? "✅ Certifié" : "⏳ En attente"}
+                      <span className={`status-badge certified`}>
+                        ✅ Certifié
                       </span>
                     </div>
                     <div className="product-details">
@@ -646,8 +697,8 @@ function App() {
                       #{product.id}
                     </span>
                     <h4 className="product-name">{product.name}</h4>
-                    <span className={`status-badge ${product.status}`}>
-                      {product.status === "certified" ? "✅ Certifié" : "⏳ En attente"}
+                    <span className={`status-badge certified`}>
+                      ✅ Certifié
                     </span>
                     {userRole === 'admin' && (
                       <span className="admin-badge">Admin Only</span>
@@ -706,15 +757,7 @@ function App() {
                         >
                           📄 Exporter PDF
                         </button>
-                        <button 
-                          className="btn-secondary"
-                          onClick={() => {
-                            // Action d'administration (à implémenter)
-                            setSuccess("Action d'administration effectuée");
-                          }}
-                        >
-                          ⚙️ Actions Admin
-                        </button>
+                        
                       </div>
                     )}
                   </div>
@@ -730,43 +773,7 @@ function App() {
           </section>
         )}
 
-        {/* SEARCH BLOCKCHAIN VIEW */}
-        {currentView === "search" && (
-          <section className="search-section">
-            <h2 className="section-title">
-              <span className="section-icon">🔍</span>
-              Recherche Blockchain
-            </h2>
-            
-            <div className="search-card">
-              <p className="search-description">
-                Rechercher un produit directement sur la blockchain par son ID
-              </p>
-              
-              <div className="search-form">
-                <div className="form-group">
-                  <label>ID du produit à rechercher</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={productIdToSearch}
-                    onChange={(e) => setProductIdToSearch(e.target.value)}
-                    className="form-input"
-                    placeholder="ex: 1"
-                  />
-                </div>
-                
-                <button 
-                  onClick={handleGetProduct} 
-                  disabled={loading}
-                  className="btn-secondary"
-                >
-                  {loading ? "⏳ Recherche..." : "🔍 Rechercher sur la Blockchain"}
-                </button>
-              </div>
-            </div>
-          </section>
-        )}
+
 
         {/* Résultat transaction */}
                 {currentView === "admin" && userRole === "admin" && (
@@ -859,7 +866,7 @@ function App() {
           <section className="result-section">
             <h3 className="result-title">
               <span className="result-icon">📄</span>
-              Données Blockchain
+              Derniers Produits
             </h3>
             
             <div className="product-cards">
@@ -898,12 +905,6 @@ function App() {
                 </div>
               ))}
             </div>
-            
-            {/* Debug JSON (à retirer plus tard) */}
-            <details className="debug-section">
-              <summary>🔧 Données brutes (développement)</summary>
-              <pre className="debug-json">{JSON.stringify(productData, null, 2)}</pre>
-            </details>
           </section>
         )}
       </main>

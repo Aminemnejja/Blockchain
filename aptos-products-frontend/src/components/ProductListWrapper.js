@@ -1,6 +1,7 @@
 import React from 'react';
 import ProductList from './ProductList';
 import auditTrailManager from '../utils/auditTrail';
+import { generateProductPDF } from '../utils/pdfUtils';
 
 const ProductListWrapper = ({
   productsList,
@@ -17,13 +18,9 @@ const ProductListWrapper = ({
   categories,
   userId
 }) => {
-  // Log d'audit pour les recherches
+  // Gestionnaire de recherche
   const handleSearchChange = (value) => {
     setSearchTerm(value);
-    if (value && value.length > 2) {
-      const results = getFilteredProducts();
-      auditTrailManager.logSearch(userId, userRole, value, results.length);
-    }
   };
   return (
     <section className="list-section">
@@ -129,9 +126,14 @@ const ProductListWrapper = ({
                 <div className="admin-actions">
                   <button 
                     className="btn-secondary"
-                    onClick={() => {
-                      // PDF generation logic will be handled by parent
-                      console.log('PDF generation for product:', product.id);
+                    onClick={async () => {
+                      try {
+                        await generateProductPDF(product, categories);
+                        console.log('PDF généré avec succès pour le produit:', product.id);
+                      } catch (error) {
+                        console.error('Erreur lors de la génération du PDF:', error);
+                        alert('Erreur lors de la génération du PDF. Veuillez réessayer.');
+                      }
                     }}
                   >
                     📄 Exporter PDF

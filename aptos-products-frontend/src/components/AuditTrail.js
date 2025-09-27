@@ -68,12 +68,6 @@ const AuditTrail = ({ userId, userRole }) => {
     }
   };
 
-  // Nettoyer les anciens logs
-  const handleCleanOldLogs = () => {
-    if (window.confirm('Êtes-vous sûr de vouloir nettoyer les anciens logs (30+ jours) ?')) {
-      auditTrailManager.cleanOldLogs(30);
-    }
-  };
 
   // Obtenir l'icône pour l'action
   const getActionIcon = (action) => {
@@ -85,7 +79,6 @@ const AuditTrail = ({ userId, userRole }) => {
       USER_LOGOUT: '🚪',
       ADMIN_ADDED: '👑',
       ADMIN_REMOVED: '❌',
-      SEARCH_PERFORMED: '🔍',
       FILTER_APPLIED: '🔽',
       SORT_APPLIED: '🔄',
       SYSTEM_ERROR: '⚠️',
@@ -140,12 +133,6 @@ const AuditTrail = ({ userId, userRole }) => {
             <option value="json">JSON</option>
             <option value="csv">CSV</option>
           </select>
-          <button 
-            className="btn-warning"
-            onClick={handleCleanOldLogs}
-          >
-            🗑️ Nettoyer
-          </button>
         </div>
       </div>
 
@@ -181,7 +168,6 @@ const AuditTrail = ({ userId, userRole }) => {
             <option value="USER_LOGIN">Connexion</option>
             <option value="ADMIN_ADDED">Ajout admin</option>
             <option value="ADMIN_REMOVED">Suppression admin</option>
-            <option value="SEARCH_PERFORMED">Recherche</option>
             <option value="SYSTEM_ERROR">Erreur système</option>
             <option value="PERMISSION_DENIED">Permission refusée</option>
           </select>

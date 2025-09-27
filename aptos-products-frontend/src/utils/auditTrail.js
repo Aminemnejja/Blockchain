@@ -42,7 +42,6 @@ class AuditTrailManager {
       USER_LOGOUT: 'USER_LOGOUT',
       ADMIN_ADDED: 'ADMIN_ADDED',
       ADMIN_REMOVED: 'ADMIN_REMOVED',
-      SEARCH_PERFORMED: 'SEARCH_PERFORMED',
       FILTER_APPLIED: 'FILTER_APPLIED',
       SORT_APPLIED: 'SORT_APPLIED',
       SYSTEM_ERROR: 'SYSTEM_ERROR',
@@ -170,15 +169,6 @@ class AuditTrailManager {
     });
   }
 
-  logSearch(userId, userRole, searchTerm, resultsCount) {
-    return this.createAuditLog({
-      action: AuditTrailManager.ACTION_TYPES.SEARCH_PERFORMED,
-      userId,
-      userRole,
-      details: { searchTerm, resultsCount },
-      severity: AuditTrailManager.SEVERITY_LEVELS.LOW
-    });
-  }
 
   logSystemError(userId, userRole, error, context) {
     return this.createAuditLog({

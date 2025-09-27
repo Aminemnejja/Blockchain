@@ -3,10 +3,20 @@ import React, { useState, useEffect } from "react";
 import { addProduct, getProduct, getAllProducts } from "./aptosFunctions";
 import { generateProductPDF } from "./utils/pdfUtils";
 import { ToastContainer, toast } from 'react-toastify';
-import NotificationBell from './components/NotificationBell';
 import notificationManager from './utils/notificationManager';
 import 'react-toastify/dist/ReactToastify.css';
 import "./pharma-styles.css";
+
+// Import des nouveaux composants
+import Header from './components/Header';
+import Dashboard from './components/Dashboard';
+import AddProduct from './components/AddProduct';
+import ProductListWrapper from './components/ProductListWrapper';
+import AdminPanel from './components/AdminPanel';
+import AuditTrail from './components/AuditTrail';
+
+// Import du système d'audit trail
+import auditTrailManager from './utils/auditTrail';
 
 function App() {
   const [address, setAddress] = useState("");
@@ -187,18 +197,28 @@ function App() {
       const isAdmin = adminAddresses.includes(address);
       setUserRole(isAdmin ? 'admin' : 'user');
       
+      // Log d'audit pour la connexion
+      auditTrailManager.logUserLogin(address, isAdmin ? 'admin' : 'user');
+      
       setSuccess(`Connecté en tant que ${isAdmin ? 'administrateur' : 'utilisateur'}`);
     } catch (err) {
       setError("Erreur de connexion: " + err.message);
+      // Log d'erreur d'audit
+      auditTrailManager.logSystemError(address || 'unknown', userRole || 'unknown', err, 'wallet_connection');
     }
   };    const handleDisconnect = async () => {
     try {
+      // Log d'audit pour la déconnexion
+      auditTrailManager.logUserLogout(address, userRole);
+      
       await window.petra.disconnect();
       setAddress("");
       setUserRole(null);
       setSuccess("Déconnecté avec succès");
     } catch (err) {
       setError("Erreur de déconnexion: " + err.message);
+      // Log d'erreur d'audit
+      auditTrailManager.logSystemError(address || 'unknown', userRole || 'unknown', err, 'wallet_disconnection');
     }
   };
 
@@ -206,6 +226,8 @@ function App() {
   const handleAddProduct = async () => {
     // Vérifier les permissions
     if (!checkPermission('admin')) {
+      // Log d'audit pour permission refusée
+      auditTrailManager.logPermissionDenied(address, userRole, 'add_product');
       setError("Permission refusée : Seuls les administrateurs peuvent ajouter des produits");
       return;
     }
@@ -245,6 +267,9 @@ function App() {
       };
       setProductsList(prev => [newProduct, ...prev]);
 
+      // Log d'audit pour l'ajout de produit
+      auditTrailManager.logProductAdded(address, userRole, newProduct);
+
       // Créer une notification
       notificationManager.notifyNewProduct({
         name,
@@ -264,6 +289,8 @@ function App() {
       setTimeout(() => setCurrentView("dashboard"), 2000);
     } catch (err) {
       setError("Erreur lors de l'ajout: " + err.message);
+      // Log d'erreur d'audit
+      auditTrailManager.logSystemError(address, userRole, err, 'product_addition');
     } finally {
       setLoading(false);
     }
@@ -376,84 +403,21 @@ function App() {
         draggable
         pauseOnHover
       />
-      {/* Header */}
-      <header className="pharma-header">
-        <div className="header-content">
-          <div className="logo-section">
-            <span className="logo">🏥</span>
-            <h1>PharmaCert</h1>
-            <span className="subtitle">Certification Blockchain Pharmaceutique</span>
-          </div>
-          
-          {/* Navigation */}
-          <nav className="main-nav">
-            <button 
-              className={currentView === "dashboard" ? "nav-btn active" : "nav-btn"}
-              onClick={() => setCurrentView("dashboard")}
-            >
-              🏠 Dashboard
-            </button>
-            {userRole === 'admin' && (
-              <button 
-                className={currentView === "add" ? "nav-btn active" : "nav-btn"}
-                onClick={() => setCurrentView("add")}
-              >
-                ➕ Ajouter
-              </button>
-            )}
-            <button 
-              className={currentView === "list" ? "nav-btn active" : "nav-btn"}
-              onClick={() => setCurrentView("list")}
-            >
-              📋 Produits
-            </button>
-
-            {userRole === 'admin' && (
-              <button 
-                className={currentView === "admin" ? "nav-btn active" : "nav-btn"}
-                onClick={() => setCurrentView("admin")}
-              >
-                👑 Administration
-              </button>
-            )}
-          </nav>
-          
-          {/* Connexion wallet */}
-          <div className="wallet-section">
-            {address && (
-              <NotificationBell
-                notifications={notifications}
-                unreadCount={unreadCount}
-                onNotificationClick={(id) => {
-                  notificationManager.markAsRead(id);
-                  setUnreadCount(notificationManager.getUnreadCount());
-                }}
-              />
-            )}
-            {address ? (
-              <div className="wallet-connected">
-                <div className="wallet-info">
-                  <span className={`wallet-label ${userRole}`}>
-                    <span className={`role-badge ${userRole}`}>
-                      {userRole === 'admin' ? '👑 ADMIN' : '👤 USER'}
-                    </span>
-                  </span>
-                  <span className="wallet-address">
-                    {address.slice(0, 8)}...{address.slice(-6)}
-                  </span>
-                </div>
-                <button className="btn-disconnect" onClick={handleDisconnect}>
-                  🔌 Déconnecter
-                </button>
-              </div>
-            ) : (
-              <button className="btn-connect" onClick={handleConnect}>
-                🔑 Connecter Petra Wallet
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
+      
+      <Header
+        address={address}
+        userRole={userRole}
+        currentView={currentView}
+        setCurrentView={setCurrentView}
+        handleConnect={handleConnect}
+        handleDisconnect={handleDisconnect}
+        notifications={notifications}
+        unreadCount={unreadCount}
+        onNotificationClick={(id) => {
+          notificationManager.markAsRead(id);
+          setUnreadCount(notificationManager.getUnreadCount());
+        }}
+      />
 
       <main className="pharma-main">
         {/* Messages */}
@@ -473,375 +437,76 @@ function App() {
 
         {/* DASHBOARD VIEW */}
         {currentView === "dashboard" && (
-          <>
-            {userRole === 'admin' ? (
-              <section className="stats-section">
-                <h2 className="section-title">
-                  <span className="section-icon">📊</span>
-                  Tableau de Bord Administrateur
-                </h2>
-                
-                <div className="stats-grid">
-                  <div className="stat-card total">
-                    <div className="stat-value">{stats.total}</div>
-                    <div className="stat-label">Produits Total</div>
-                  </div>
-                  <div className="stat-card certified">
-                    <div className="stat-value">{stats.certified}</div>
-                    <div className="stat-label">Certifiés</div>
-                  </div>
-                  {/* Statut en attente supprimé: tout est certifié à l'ajout */}
-                  <div className="stat-card today">
-                    <div className="stat-value">{stats.today}</div>
-                    <div className="stat-label">Aujourd'hui</div>
-                  </div>
-                </div>
-              </section>
-            ) : (
-              <section className="stats-section">
-                <h2 className="section-title">
-                  <span className="section-icon">📊</span>
-                  Tableau de Bord Utilisateur
-                </h2>
-                
-                <div className="stats-grid">
-                  <div className="stat-card total">
-                    <div className="stat-value">{stats.total}</div>
-                    <div className="stat-label">Produits Total</div>
-                  </div>
-                  <div className="stat-card certified">
-                    <div className="stat-value">{stats.certified}</div>
-                    <div className="stat-label">Certifiés</div>
-                  </div>
-                </div>
-              </section>
-            )}
-
-            <section className="recent-section">
-              <h3 className="section-title">
-                <span className="section-icon">🕒</span>
-                Derniers Produits
-              </h3>
-              
-              <div className="recent-products">
-                {productsList.slice(0, 3).map(product => (
-                  <div key={product.id} className="recent-product-card">
-                    <div className="product-header">
-                      <span 
-                        className="product-id"
-                        style={{ backgroundColor: getCategoryColor(product.category) }}
-                      >
-                        #{product.id}
-                      </span>
-                      <h4 className="product-name">{product.name}</h4>
-                      <span className={`status-badge certified`}>
-                        ✅ Certifié
-                      </span>
-                    </div>
-                    <div className="product-details">
-                      <span className="product-supplier">{product.supplier}</span>
-                      <span className="product-time">
-                        {formatArrivalDate(product.arrival_date)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          </>
+          <Dashboard
+            userRole={userRole}
+            productsList={productsList}
+            stats={stats}
+            getCategoryColor={getCategoryColor}
+            formatArrivalDate={formatArrivalDate}
+          />
         )}
 
         {/* ADD PRODUCT VIEW */}
         {currentView === "add" && (
-          <section className="form-section">
-            <h2 className="section-title">
-              <span className="section-icon">➕</span>
-              Nouveau Produit Pharmaceutique
-            </h2>
-            
-            <div className="form-card">
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Nom du produit *</label>
-                  <input
-                    type="text"
-                    placeholder="ex: Paracétamol 500mg"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="form-input"
-                  />
-                </div>
-                
-                <div className="form-group">
-                  <label>Catégorie *</label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="form-select"
-                    style={{ borderLeftColor: getCategoryColor(category) }}
-                  >
-                    {categories.map(cat => (
-                      <option key={cat.value} value={cat.value}>
-                        {cat.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Fournisseur *</label>
-                  <input
-                    type="text"
-                    placeholder="ex: PharmaSup Inc."
-                    value={supplier}
-                    onChange={(e) => setSupplier(e.target.value)}
-                    className="form-input"
-                  />
-                </div>
-                
-                <div className="form-group">
-                  <label>Numéro de lot *</label>
-                  <input
-                    type="text"
-                    placeholder="ex: PSI-2025-0892"
-                    value={batchNumber}
-                    onChange={(e) => setBatchNumber(e.target.value)}
-                    className="form-input"
-                  />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>Description *</label>
-                <textarea
-                  placeholder="Description détaillée du produit..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="form-textarea"
-                  rows="3"
-                />
-              </div>
-
-              <button 
-                onClick={handleAddProduct} 
-                disabled={loading || !address}
-                className="btn-submit"
-              >
-                {loading ? (
-                  <>⏳ Certification en cours...</>
-                ) : (
-                  <>🔗 Certifier sur la Blockchain</>
-                )}
-              </button>
-            </div>
-          </section>
+          <AddProduct
+            name={name}
+            setName={setName}
+            category={category}
+            setCategory={setCategory}
+            description={description}
+            setDescription={setDescription}
+            supplier={supplier}
+            setSupplier={setSupplier}
+            batchNumber={batchNumber}
+            setBatchNumber={setBatchNumber}
+            categories={categories}
+            getCategoryColor={getCategoryColor}
+            handleAddProduct={handleAddProduct}
+            loading={loading}
+            address={address}
+          />
         )}
 
         {/* PRODUCTS LIST VIEW */}
         {currentView === "list" && (
-          <section className="list-section">
-            <h2 className="section-title">
-              <span className="section-icon">📋</span>
-              Liste des Produits Certifiés
-            </h2>
-            
-            {/* Filtres */}
-            <div className="filters-bar">
-              <div className="search-group">
-                <input
-                  type="text"
-                  placeholder="🔍 Rechercher par nom, fournisseur ou lot..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="search-input"
-                />
-              </div>
-              
-              <div className="filter-group">
-                <select
-                  value={filterCategory}
-                  onChange={(e) => setFilterCategory(e.target.value)}
-                  className="filter-select"
-                >
-                  <option value="all">Toutes catégories</option>
-                  {categories.map(cat => (
-                    <option key={cat.value} value={cat.value}>
-                      {cat.label}
-                    </option>
-                  ))}
-                </select>
-                
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  className="filter-select"
-                >
-                  <option value="newest">Plus récents</option>
-                  <option value="oldest">Plus anciens</option>
-                  <option value="name">Par nom</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Liste des produits */}
-            <div className="products-grid">
-                  {getFilteredProducts().map(product => (
-                <div key={product.id} className="product-card-full">
-                  <div className="product-header">
-                    <span 
-                      className="product-id"
-                      style={{ backgroundColor: getCategoryColor(product.category) }}
-                    >
-                      #{product.id}
-                    </span>
-                    <h4 className="product-name">{product.name}</h4>
-                    <span className={`status-badge certified`}>
-                      ✅ Certifié
-                    </span>
-                    {userRole === 'admin' && (
-                      <span className="admin-badge">Admin Only</span>
-                    )}
-                  </div>
-                  
-                  <div className="product-details">
-                    <div className="detail-row">
-                      <span className="detail-label">Catégorie:</span>
-                      <span className="detail-value">
-                        {categories.find(c => c.value === product.category)?.label || product.category}
-                      </span>
-                    </div>
-                    
-                    {/* Information sensible visible uniquement par les admins */}
-                    {userRole === 'admin' && (
-                      <>
-                        <div className="detail-row">
-                          <span className="detail-label">Fournisseur:</span>
-                          <span className="detail-value">{product.supplier}</span>
-                        </div>
-                        
-                        <div className="detail-row">
-                          <span className="detail-label">Lot:</span>
-                          <span className="detail-value">{product.batchNumber}</span>
-                        </div>
-                      </>
-                    )}
-                    
-                    <div className="detail-row">
-                      <span className="detail-label">Date d'arrivée:</span>
-                      <span className="detail-value">
-                        {formatArrivalDate(product.arrival_date)}
-                      </span>
-                    </div>
-                    
-                    <div className="detail-row">
-                      <span className="detail-label">Description:</span>
-                      <span className="detail-value">{product.description}</span>
-                    </div>
-
-                    {userRole === 'admin' && (
-                      <div className="admin-actions">
-                        <button 
-                          className="btn-secondary"
-                          onClick={() => {
-                            generateProductPDF(product, categories)
-                              .then(() => {
-                                toast.success("PDF généré avec succès");
-                              })
-                              .catch((error) => {
-                                toast.error("Erreur lors de la génération du PDF");
-                                console.error(error);
-                              });
-                          }}
-                        >
-                          📄 Exporter PDF
-                        </button>
-                        
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}              {getFilteredProducts().length === 0 && (
-                <div className="no-results">
-                  <span className="no-results-icon">🔍</span>
-                  <h3>Aucun produit trouvé</h3>
-                  <p>Essayez de modifier vos critères de recherche</p>
-                </div>
-              )}
-            </div>
-          </section>
+          <ProductListWrapper
+            productsList={productsList}
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
+            filterCategory={filterCategory}
+            setFilterCategory={setFilterCategory}
+            sortBy={sortBy}
+            setSortBy={setSortBy}
+            getFilteredProducts={getFilteredProducts}
+            getCategoryColor={getCategoryColor}
+            formatArrivalDate={formatArrivalDate}
+            userRole={userRole}
+            categories={categories}
+            userId={address}
+          />
         )}
 
 
 
-        {/* Résultat transaction */}
-                {currentView === "admin" && userRole === "admin" && (
-          <section className="admin-section">
-            <h2 className="section-title">
-              <span className="section-icon">👑</span>
-              Administration
-            </h2>
+        {/* ADMIN PANEL */}
+        {currentView === "admin" && userRole === "admin" && (
+          <>
+            <AdminPanel
+              newAdminAddress={newAdminAddress}
+              setNewAdminAddress={setNewAdminAddress}
+              adminList={adminList}
+              setAdminList={setAdminList}
+              address={address}
+              setSuccess={setSuccess}
+              userRole={userRole}
+            />
             
-            <div className="admin-card">
-              <h3 className="admin-subtitle">Gestion des Administrateurs</h3>
-              
-              <div className="form-card">
-                <div className="form-group">
-                  <label>Ajouter un administrateur</label>
-                  <div className="admin-add-group">
-                    <input
-                      type="text"
-                      placeholder="Adresse du wallet (0x...)"
-                      value={newAdminAddress}
-                      onChange={(e) => setNewAdminAddress(e.target.value)}
-                      className="form-input"
-                    />
-                    <button 
-                      className="btn-secondary"
-                      onClick={() => {
-                        if (newAdminAddress) {
-                          setAdminList([...adminList, { 
-                            address: newAdminAddress, 
-                            dateAdded: Date.now() 
-                          }]);
-                          setNewAdminAddress("");
-                          setSuccess("Administrateur ajouté avec succès");
-                        }
-                      }}
-                    >
-                      ➕ Ajouter
-                    </button>
-                  </div>
-                </div>
-
-                <div className="admin-list">
-                  <h4>Liste des Administrateurs</h4>
-                  {adminList.map((admin, index) => (
-                    <div key={index} className="admin-item">
-                      <div className="admin-info">
-                        <span className="admin-address">{admin.address}</span>
-                        <span className="admin-date">
-                          Ajouté le {new Date(admin.dateAdded).toLocaleDateString()}
-                        </span>
-                      </div>
-                      {admin.address !== address && (
-                        <button 
-                          className="btn-remove"
-                          onClick={() => {
-                            setAdminList(adminList.filter((_, i) => i !== index));
-                            setSuccess("Administrateur retiré avec succès");
-                          }}
-                        >
-                          ❌ Retirer
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </section>
+            {/* Audit Trail pour les admins */}
+            <AuditTrail
+              userId={address}
+              userRole={userRole}
+            />
+          </>
         )}
 
         {txHash && (

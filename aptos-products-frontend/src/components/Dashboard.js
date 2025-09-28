@@ -41,11 +41,7 @@ const Dashboard = ({
           <div className="stats-grid">
             <div className="stat-card total">
               <div className="stat-value">{stats.total}</div>
-              <div className="stat-label">Produits Total</div>
-            </div>
-            <div className="stat-card certified">
-              <div className="stat-value">{stats.certified}</div>
-              <div className="stat-label">Certifiés</div>
+              <div className="stat-label">Produits</div>
             </div>
           </div>
         </section>

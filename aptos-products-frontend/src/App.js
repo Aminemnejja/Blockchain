@@ -1,8 +1,7 @@
 // src/App.js - ÉTAPE 2: Fonctionnalités avancées PharmaCert
 import React, { useState, useEffect } from "react";
 import { addProduct, getProduct, getAllProducts } from "./aptosFunctions";
-import { generateProductPDF } from "./utils/pdfUtils";
-import { ToastContainer, toast } from 'react-toastify';
+import { ToastContainer } from 'react-toastify';
 import notificationManager from './utils/notificationManager';
 import 'react-toastify/dist/ReactToastify.css';
 import "./pharma-styles.css";
@@ -41,7 +40,7 @@ function App() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
-  const [productIdToSearch, setProductIdToSearch] = useState("1");
+  const [productIdToSearch] = useState("1");
   // États pour la gestion des administrateurs
   const [newAdminAddress, setNewAdminAddress] = useState("");
   const [adminList, setAdminList] = useState([
@@ -298,28 +297,6 @@ function App() {
     }
   };
 
-  // Lire un produit spécifique
-  const handleGetProduct = async () => {
-    if (!address) {
-      setError("Veuillez d'abord connecter votre wallet pour obtenir l'adresse");
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-    setSuccess("");
-    setProductData(null);
-
-    try {
-      const result = await getProduct(address, parseInt(productIdToSearch));
-      setProductData(result);
-      setSuccess(`Produit #${productIdToSearch} récupéré de la blockchain`);
-    } catch (err) {
-      setError("Erreur lors de la récupération: " + (err.message || JSON.stringify(err)));
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Filtrer et trier les produits
   const getFilteredProducts = () => {

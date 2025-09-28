@@ -1,6 +1,4 @@
 import React from 'react';
-import ProductList from './ProductList';
-import auditTrailManager from '../utils/auditTrail';
 import { generateProductPDF } from '../utils/pdfUtils';
 
 const ProductListWrapper = ({

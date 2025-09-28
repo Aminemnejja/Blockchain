@@ -41,11 +41,22 @@ function App() {
   const [filterCategory, setFilterCategory] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
   // États pour la gestion des administrateurs
+
+  // Liste des adresses administrateurs
+  const adminAddresses = [
+    "0x6c940c3205cb7d3b40a2fbb4e550aabaf7a13bb3f92465ac2fe4b31bbd664e02", 
+    "0x207ba9b3b269a8da9d9c75a7f21f76ae9c777b6061de4a7b87e6f2c55aa03e07",
+    "0x01aceb8161bf75306f457353fc13f7896f2d64ab290c602b81a74825f0dcf07d",
+    "0x80566a96ea720fb6fbca940a9f07a3b8a813c2806b6fae56c990a1181865e2c7"
+  ];  
   const [newAdminAddress, setNewAdminAddress] = useState("");
-  const [adminList, setAdminList] = useState([
-    // Liste initiale des administrateurs
-    { address: "0x123...", dateAdded: Date.now() }
-  ]);
+  const [adminList, setAdminList] = useState(
+    // Liste initiale des administrateurs basée sur adminAddresses
+    adminAddresses.map(address => ({
+      address,
+      dateAdded: Date.now()
+    }))
+  );
 
   // États pour les notifications
   const [notifications, setNotifications] = useState([]);
@@ -182,13 +193,7 @@ function App() {
     { value: "matiere-premiere", label: "🟣 Matière Première", color: "#8b5cf6" }
   ];
 
-  // Liste des adresses administrateurs
-  const adminAddresses = [
-    "0x6c940c3205cb7d3b40a2fbb4e550aabaf7a13bb3f92465ac2fe4b31bbd664e02", 
-    "0x207ba9b3b269a8da9d9c75a7f21f76ae9c777b6061de4a7b87e6f2c55aa03e07",
-    "0x01aceb8161bf75306f457353fc13f7896f2d64ab290c602b81a74825f0dcf07d",
-    "0x80566a96ea720fb6fbca940a9f07a3b8a813c2806b6fae56c990a1181865e2c7" // Adresse admin principale
-  ];  // Connexion wallet
+
   const handleConnect = async () => {
     try {
       const { address } = await window.petra.connect();

@@ -1,6 +1,6 @@
 // src/App.js - ÉTAPE 2: Fonctionnalités avancées PharmaCert
 import React, { useState, useEffect } from "react";
-import { addProduct, getProduct, getAllProducts } from "./aptosFunctions";
+import { addProduct, getAllProducts } from "./aptosFunctions";
 import { ToastContainer } from 'react-toastify';
 import notificationManager from './utils/notificationManager';
 import 'react-toastify/dist/ReactToastify.css';
@@ -20,7 +20,7 @@ import auditTrailManager from './utils/auditTrail';
 function App() {
   const [address, setAddress] = useState("");
   const [txHash, setTxHash] = useState("");
-  const [productData, setProductData] = useState(null);
+  const [productData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -40,7 +40,6 @@ function App() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
-  const [productIdToSearch] = useState("1");
   // États pour la gestion des administrateurs
   const [newAdminAddress, setNewAdminAddress] = useState("");
   const [adminList, setAdminList] = useState([

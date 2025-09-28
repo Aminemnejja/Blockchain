@@ -186,7 +186,8 @@ function App() {
   const adminAddresses = [
     "0x6c940c3205cb7d3b40a2fbb4e550aabaf7a13bb3f92465ac2fe4b31bbd664e02", 
     "0x207ba9b3b269a8da9d9c75a7f21f76ae9c777b6061de4a7b87e6f2c55aa03e07",
-    "0x01aceb8161bf75306f457353fc13f7896f2d64ab290c602b81a74825f0dcf07d", // Adresse admin principale
+    "0x01aceb8161bf75306f457353fc13f7896f2d64ab290c602b81a74825f0dcf07d",
+    "0x80566a96ea720fb6fbca940a9f07a3b8a813c2806b6fae56c990a1181865e2c7" // Adresse admin principale
   ];  // Connexion wallet
   const handleConnect = async () => {
     try {

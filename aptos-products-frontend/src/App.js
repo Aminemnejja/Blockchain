@@ -195,7 +195,10 @@ function App() {
       setAddress(address);
       
       // Vérification du rôle
+      console.log('🔍 DEBUG - Adresse connectée:', address);
+      console.log('🔍 DEBUG - Liste des admins:', adminAddresses);
       const isAdmin = adminAddresses.includes(address);
+      console.log('🔍 DEBUG - Est admin?', isAdmin);
       setUserRole(isAdmin ? 'admin' : 'user');
       
       // Log d'audit pour la connexion

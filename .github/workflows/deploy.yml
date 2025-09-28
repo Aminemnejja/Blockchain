@@ -1,9 +1,7 @@
-name: Build
+name: Build React App
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
     branches: [ main ]
 
 jobs:
@@ -11,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout
+    - name: Checkout code
       uses: actions/checkout@v3
       
     - name: Setup Node.js
@@ -26,13 +24,13 @@ jobs:
         cd aptos-products-frontend
         npm ci
         
-    - name: Build
+    - name: Build application
       run: |
         cd aptos-products-frontend
         npm run build
         
-    - name: Upload build artifacts
+    - name: Upload build files
       uses: actions/upload-artifact@v3
       with:
-        name: build-files
+        name: react-build
         path: aptos-products-frontend/build/
